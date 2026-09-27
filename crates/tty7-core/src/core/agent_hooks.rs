@@ -100,8 +100,6 @@ fn build_hook_sequence(agent: &str, event: &str, stdin_json: &str) -> Vec<u8> {
         ("cwd", "cwd"),
         // Goose spells the working directory its own way.
         ("cwd", "working_dir"),
-        // Antigravity spells the session in camelCase.
-        ("session_id", "conversationId"),
     ] {
         if let Some(v) = payload
             .get(key)
@@ -112,8 +110,21 @@ fn build_hook_sequence(agent: &str, event: &str, stdin_json: &str) -> Vec<u8> {
             body[key] = serde_json::Value::String(v.to_string());
         }
     }
+    // Antigravity names the session after the conversation, in camelCase.
+    // Scoped to it: the alias table is last-write-wins, and another agent's
+    // unrelated `conversationId` must not replace its real session id.
+    if agent == "antigravity"
+        && body.get("session_id").is_none()
+        && let Some(id) = payload
+            .get("conversationId")
+            .and_then(|v| v.as_str())
+            .filter(|v| !v.is_empty())
+    {
+        body["session_id"] = serde_json::Value::String(id.to_string());
+    }
     // Cursor puts `cwd` only on its tool events; the rest carry the workspace
     // roots instead, and the first of those is where the session runs.
+    // Antigravity's `workspacePaths` is the same list under its own name.
     if body.get("cwd").is_none()
         && let Some(root) = payload
             .get("workspace_roots")
