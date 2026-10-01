@@ -764,6 +764,8 @@ l10n_keys! {
     SettingsAgentCursorCli,
     SettingsAgentPrimeAgent,
     SettingsAgentAntigravity,
+    SettingsAgentEmpryo,
+    SettingsAgentJcode,
     SettingsAgentQoderCn,
     SettingsSearchAppHttpProxyKeywords,
     SettingsSearchAboutKeywords,
@@ -828,6 +830,8 @@ l10n_keys! {
     SettingsSearchCursorCliKeywords,
     SettingsSearchPrimeAgentKeywords,
     SettingsSearchAntigravityKeywords,
+    SettingsSearchEmpryoKeywords,
+    SettingsSearchJcodeKeywords,
     SettingsSearchQoderCnKeywords,
     SettingsSearchRememberWindowSizeKeywords,
     SettingsSearchReportMouseToAppsKeywords,
@@ -2024,6 +2028,8 @@ mod tests {
             L10nKey::SettingsAgentCursorCli,
             L10nKey::SettingsAgentPrimeAgent,
             L10nKey::SettingsAgentAntigravity,
+            L10nKey::SettingsAgentEmpryo,
+            L10nKey::SettingsAgentJcode,
             L10nKey::SettingsAgentQoderCn,
             // Windows names its backdrop materials, and Japanese Windows keeps
             // those names in Latin script — so does this list. Chinese does

@@ -602,10 +602,12 @@ pub enum HookAgent {
     PrimeAgent,
     Antigravity,
     QoderCLICn,
+    Empryo,
+    Jcode,
 }
 
 impl HookAgent {
-    pub const ALL: [HookAgent; 20] = [
+    pub const ALL: [HookAgent; 22] = [
         HookAgent::Claude,
         HookAgent::Codex,
         HookAgent::TraeCode,
@@ -626,6 +628,8 @@ impl HookAgent {
         HookAgent::Cursor,
         HookAgent::PrimeAgent,
         HookAgent::Antigravity,
+        HookAgent::Empryo,
+        HookAgent::Jcode,
     ];
 
     /// The hooks behind a detected agent process, if it has any.
@@ -645,6 +649,8 @@ impl HookAgent {
             CLIAgent::OhMyPi => Some(HookAgent::OhMyPi),
             CLIAgent::PrimeAgent => Some(HookAgent::PrimeAgent),
             CLIAgent::Antigravity => Some(HookAgent::Antigravity),
+            CLIAgent::Empryo => Some(HookAgent::Empryo),
+            CLIAgent::Jcode => Some(HookAgent::Jcode),
             CLIAgent::Gemini => Some(HookAgent::Gemini),
             CLIAgent::Droid => Some(HookAgent::Droid),
             CLIAgent::Qwen => Some(HookAgent::Qwen),
@@ -660,9 +666,7 @@ impl HookAgent {
             | CLIAgent::Auggie
             | CLIAgent::Hermes
             | CLIAgent::Vibe
-            | CLIAgent::Empryo
-            | CLIAgent::Muse
-            | CLIAgent::Jcode => None,
+            | CLIAgent::Muse => None,
         }
     }
 
@@ -678,6 +682,8 @@ impl HookAgent {
             HookAgent::Droid => Some(DROID_HOOK_EVENTS),
             HookAgent::Qwen => Some(QWEN_HOOK_EVENTS),
             HookAgent::QoderCLI | HookAgent::QoderCLICn => Some(QODER_HOOK_EVENTS),
+            HookAgent::Empryo => Some(EMPRYO_HOOK_EVENTS),
+            HookAgent::Jcode => Some(JCODE_HOOK_EVENTS),
             HookAgent::Crush => Some(CRUSH_HOOK_EVENTS),
             HookAgent::CodeBuddy => Some(CODEBUDDY_HOOK_EVENTS),
             HookAgent::Cursor => Some(CURSOR_HOOK_EVENTS),
@@ -746,6 +752,8 @@ impl HookAgent {
             HookAgent::OhMyPi => "omp",
             HookAgent::PrimeAgent => "prime-agent",
             HookAgent::Antigravity => "antigravity",
+            HookAgent::Empryo => "empryo",
+            HookAgent::Jcode => "jcode",
             HookAgent::Gemini => "gemini",
             HookAgent::Droid => "droid",
             HookAgent::Qwen => "qwen",
@@ -771,6 +779,8 @@ impl HookAgent {
             HookAgent::OhMyPi => "Oh My Pi",
             HookAgent::PrimeAgent => "Prime Agent",
             HookAgent::Antigravity => "Antigravity",
+            HookAgent::Empryo => "Empryo",
+            HookAgent::Jcode => "jcode",
             HookAgent::Gemini => "Gemini",
             HookAgent::Droid => "Droid",
             HookAgent::Qwen => "Qwen Code",
@@ -803,6 +813,8 @@ impl HookAgent {
                 target.under_home(&[".prime", "agent", "extensions", "tty7", "index.ts"])
             }
             HookAgent::Antigravity => target.under_home(&[".gemini", "config", "hooks.json"]),
+            HookAgent::Empryo => target.under_home(&[".empryo", "hooks.json"]),
+            HookAgent::Jcode => target.jcode_config_path(),
             HookAgent::Grok => target.under_home(&[".grok", "hooks", OWNED_FILE_STEM_JSON]),
             HookAgent::OhMyPi => {
                 target.under_home(&[".omp", "agent", "extensions", "tty7", "index.ts"])
@@ -939,6 +951,15 @@ impl<'a> HookTarget<'a> {
             return PathBuf::from(dir);
         }
         self.under_home(&[".config"])
+    }
+
+    fn jcode_config_path(&self) -> PathBuf {
+        if self.is_local()
+            && let Some(dir) = std::env::var_os("JCODE_HOME").filter(|d| !d.is_empty())
+        {
+            return PathBuf::from(dir).join("config.toml");
+        }
+        self.under_home(&[".jcode", "config.toml"])
     }
 
     fn kimi_config_path(&self) -> PathBuf {
@@ -1086,6 +1107,9 @@ pub fn hooks_state(target: &HookTarget, agent: HookAgent) -> HooksState {
     if agent == HookAgent::Antigravity {
         return named_hook_set_state(target, &path, &antigravity_hook_set(target));
     }
+    if agent == HookAgent::Jcode {
+        return jcode_hooks_state(target, &path);
+    }
     if let Some(events) = agent.toml_hook_events() {
         return toml_hooks_state(target, &path, agent, events);
     }
@@ -1126,6 +1150,10 @@ pub fn install_hooks(target: &HookTarget, agent: HookAgent) -> anyhow::Result<Ho
         named_hook_set_install(target, &path, antigravity_hook_set(target))?;
         return Ok(HookOutcome::Installed);
     }
+    if agent == HookAgent::Jcode {
+        jcode_hooks_install(target, &path)?;
+        return Ok(HookOutcome::Installed);
+    }
     if let Some(events) = agent.toml_hook_events() {
         toml_hooks_install(target, &path, agent, events)?;
         return Ok(HookOutcome::Installed);
@@ -1153,6 +1181,9 @@ pub fn uninstall_hooks(target: &HookTarget, agent: HookAgent) -> anyhow::Result<
     let path = agent.target_path(target);
     if agent == HookAgent::Antigravity {
         return named_hook_set_uninstall(target, &path);
+    }
+    if agent == HookAgent::Jcode {
+        return jcode_hooks_uninstall(target, &path);
     }
     if agent.toml_hook_events().is_some() {
         return toml_hooks_uninstall(target, &path, agent);
@@ -1270,6 +1301,16 @@ const GEMINI_HOOK_EVENTS: &[(&str, &str)] = &[
     ("SessionEnd", "session-end"),
 ];
 
+/// Empryo uses Claude-compatible lifecycle hooks in ~/.empryo/hooks.json.
+const EMPRYO_HOOK_EVENTS: &[(&str, &str)] = &[
+    ("SessionStart", "session-start"),
+    ("UserPromptSubmit", "prompt-submit"),
+    ("PostToolUse", "tool-complete"),
+    ("Stop", "stop"),
+    ("StopFailure", "stop"),
+    ("SessionEnd", "session-end"),
+];
+
 const DROID_HOOK_EVENTS: &[(&str, &str)] = &[
     ("SessionStart", "session-start"),
     ("UserPromptSubmit", "prompt-submit"),
@@ -1305,6 +1346,14 @@ const QWEN_HOOK_EVENTS: &[(&str, &str)] = &[
 /// leave the pane on "working" forever and `tty7 wait` would only ever time
 /// out, so both report the same end-of-turn as `Stop` does. All three are
 /// observation-only events, and a doubled `stop` is idempotent.
+const JCODE_HOOK_EVENTS: &[(&str, &str)] = &[
+    ("turn_start", "prompt-submit"),
+    ("turn_end", "stop"),
+    ("session_start", "session-start"),
+    ("session_end", "session-end"),
+    ("post_tool", "tool-complete"),
+];
+
 const KIMI_HOOK_EVENTS: &[(&str, &str)] = &[
     ("SessionStart", "session-start"),
     ("UserPromptSubmit", "prompt-submit"),
@@ -1568,6 +1617,98 @@ fn marker_hook<'a>(entry: &'a serde_json::Value, marker: &str) -> Option<&'a ser
         .and_then(|h| h.as_array())?
         .iter()
         .find(|h| ours(h))
+}
+
+fn jcode_hooks_state(target: &HookTarget, path: &Path) -> HooksState {
+    let Ok(text) = target.read(path) else {
+        return HooksState::NotInstalled;
+    };
+    let Ok(doc) = text.parse::<toml_edit::DocumentMut>() else {
+        return HooksState::NotInstalled;
+    };
+    let Some(table) = doc.get("hooks").and_then(|item| item.as_table()) else {
+        return HooksState::NotInstalled;
+    };
+    let marker = HookAgent::Jcode.marker();
+    let complete = JCODE_HOOK_EVENTS.iter().all(|(key, event)| {
+        let expected = target.hook_command(HookAgent::Jcode, event);
+        table.get(*key).and_then(|v| v.as_str()) == Some(expected.as_str())
+    });
+    let ours = JCODE_HOOK_EVENTS.iter().any(|(key, _)| {
+        table
+            .get(*key)
+            .and_then(|v| v.as_str())
+            .is_some_and(|v| v.contains(&marker))
+    });
+    if complete {
+        HooksState::Installed
+    } else if ours {
+        HooksState::Outdated
+    } else {
+        HooksState::NotInstalled
+    }
+}
+
+fn jcode_hooks_install(target: &HookTarget, path: &Path) -> anyhow::Result<()> {
+    let mut doc: toml_edit::DocumentMut = match target.read(path) {
+        Ok(text) => text.parse().map_err(|e| {
+            anyhow::anyhow!(
+                "{} is not valid TOML ({e}); not touching it",
+                path.display()
+            )
+        })?,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => toml_edit::DocumentMut::new(),
+        Err(e) => return Err(anyhow::anyhow!("read {}: {e}", path.display())),
+    };
+    let hooks = doc["hooks"].or_insert(toml_edit::table());
+    let table = hooks.as_table_mut().ok_or_else(|| {
+        anyhow::anyhow!("{} hooks is not a table; not touching it", path.display())
+    })?;
+    for (key, event) in JCODE_HOOK_EVENTS {
+        let command = target.hook_command(HookAgent::Jcode, event);
+        if let Some(existing) = table.get(*key).and_then(|v| v.as_str())
+            && !existing.contains(&HookAgent::Jcode.marker())
+            && existing != command
+        {
+            continue;
+        }
+        table[*key] = toml_edit::value(command);
+    }
+    target.write(path, doc.to_string().as_bytes())
+}
+
+fn jcode_hooks_uninstall(target: &HookTarget, path: &Path) -> anyhow::Result<HookOutcome> {
+    let text = match target.read(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(HookOutcome::NothingInstalled),
+        Err(e) => return Err(anyhow::anyhow!("read {}: {e}", path.display())),
+    };
+    let mut doc: toml_edit::DocumentMut = text.parse().map_err(|e| {
+        anyhow::anyhow!(
+            "{} is not valid TOML ({e}); not touching it",
+            path.display()
+        )
+    })?;
+    let Some(table) = doc.get_mut("hooks").and_then(|v| v.as_table_mut()) else {
+        return Ok(HookOutcome::NoTty7Hooks);
+    };
+    let marker = HookAgent::Jcode.marker();
+    let mut removed = false;
+    for (key, _) in JCODE_HOOK_EVENTS {
+        if table
+            .get(*key)
+            .and_then(|v| v.as_str())
+            .is_some_and(|v| v.contains(&marker))
+        {
+            table.remove(*key);
+            removed = true;
+        }
+    }
+    if !removed {
+        return Ok(HookOutcome::NoTty7Hooks);
+    }
+    target.write(path, doc.to_string().as_bytes())?;
+    Ok(HookOutcome::Removed)
 }
 
 fn toml_hooks_state(
@@ -1875,7 +2016,9 @@ fn owned_file_content(target: &HookTarget, agent: HookAgent) -> Option<String> {
         | HookAgent::CodeBuddy
         | HookAgent::Cursor
         | HookAgent::Antigravity
-        | HookAgent::Kimi => None,
+        | HookAgent::Kimi
+        | HookAgent::Empryo
+        | HookAgent::Jcode => None,
     }
 }
 
@@ -2734,6 +2877,8 @@ mod tests {
             (HookAgent::Crush, "/home/me/.config/crush/crush.json"),
             (HookAgent::CodeBuddy, "/home/me/.codebuddy/settings.json"),
             (HookAgent::Cursor, "/home/me/.cursor/hooks.json"),
+            (HookAgent::Empryo, "/home/me/.empryo/hooks.json"),
+            (HookAgent::Jcode, "/home/me/.jcode/config.toml"),
             (
                 HookAgent::PrimeAgent,
                 "/home/me/.prime/agent/extensions/tty7/index.ts",
@@ -3555,6 +3700,8 @@ mod tests {
             (HookAgent::Crush, "/home/me/.config/crush/crush.json"),
             (HookAgent::CodeBuddy, "/home/me/.codebuddy/settings.json"),
             (HookAgent::Cursor, "/home/me/.cursor/hooks.json"),
+            (HookAgent::Empryo, "/home/me/.empryo/hooks.json"),
+            (HookAgent::Jcode, "/home/me/.jcode/config.toml"),
         ] {
             assert_eq!(
                 agent.target_path(&target),
@@ -3590,6 +3737,78 @@ mod tests {
             here.hook_command(HookAgent::Claude, "stop"),
             format!("{command_exe} agent-hook claude stop")
         );
+    }
+
+    #[test]
+    fn empryo_hooks_merge_with_existing_lifecycle_hooks() {
+        let dir = std::env::temp_dir().join(format!("tty7-empryo-hooks-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let host = FakeRemote::shared();
+        let target = HookTarget::remote(&*host, dir.clone());
+        let path = HookAgent::Empryo.target_path(&target);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, r#"{"hooks":{"SessionStart":[]}}"#).unwrap();
+        assert_eq!(
+            hooks_state(&target, HookAgent::Empryo),
+            HooksState::NotInstalled
+        );
+        install_hooks(&target, HookAgent::Empryo).expect("install succeeds");
+        assert_eq!(
+            hooks_state(&target, HookAgent::Empryo),
+            HooksState::Installed
+        );
+        let root: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(root["hooks"]["SessionStart"].as_array().unwrap().len() >= 1);
+        assert!(
+            root["hooks"]["SessionEnd"][0]["hooks"][0]["command"]
+                .as_str()
+                .unwrap()
+                .ends_with("agent-hook empryo session-end")
+        );
+        install_hooks(&target, HookAgent::Empryo).expect("reinstall succeeds");
+        assert_eq!(
+            hooks_state(&target, HookAgent::Empryo),
+            HooksState::Installed
+        );
+        assert_eq!(
+            uninstall_hooks(&target, HookAgent::Empryo).unwrap(),
+            HookOutcome::Removed
+        );
+        assert_eq!(
+            uninstall_hooks(&target, HookAgent::Empryo).unwrap(),
+            HookOutcome::NothingInstalled
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn jcode_hooks_use_native_config_lifecycle_keys() {
+        let dir = std::env::temp_dir().join(format!("tty7-jcode-hooks-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let host = FakeRemote::shared();
+        let target = HookTarget::remote(&*host, dir.clone());
+        let path = HookAgent::Jcode.target_path(&target);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "[hooks]\nturn_start = \"user-hook\"\n").unwrap();
+        install_hooks(&target, HookAgent::Jcode).expect("install succeeds");
+        assert_eq!(
+            hooks_state(&target, HookAgent::Jcode),
+            HooksState::Installed
+        );
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("turn_start"));
+        assert!(text.contains("agent-hook jcode prompt-submit"));
+        assert_eq!(
+            uninstall_hooks(&target, HookAgent::Jcode).unwrap(),
+            HookOutcome::Removed
+        );
+        assert!(
+            std::fs::read_to_string(&path)
+                .unwrap()
+                .contains("user-hook")
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

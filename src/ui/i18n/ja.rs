@@ -926,6 +926,8 @@ pub fn translate_ja(key: L10nKey) -> Option<&'static str> {
         L10nKey::SettingsAgentCursorCli => "Cursor CLI",
         L10nKey::SettingsAgentPrimeAgent => "Prime Agent",
         L10nKey::SettingsAgentAntigravity => "Antigravity",
+        L10nKey::SettingsAgentEmpryo => "Empryo",
+        L10nKey::SettingsAgentJcode => "jcode",
         L10nKey::SettingsAgentQoderCn => "Qoder CN CLI",
         L10nKey::SettingsSearchAboutKeywords => {
             "バージョン ライセンス クレジット ビルド 更新 確認 github about version license credits update check"
@@ -1088,6 +1090,8 @@ pub fn translate_ja(key: L10nKey) -> Option<&'static str> {
         L10nKey::SettingsSearchPrimeAgentKeywords => {
             "エージェント 統合 拡張 インストール prime prime-agent primeintellect agent integration extension install"
         }
+        L10nKey::SettingsSearchEmpryoKeywords => "empryo agent hooks",
+        L10nKey::SettingsSearchJcodeKeywords => "jcode agent hooks",
         L10nKey::SettingsSearchAntigravityKeywords => {
             "エージェント 統合 フック インストール antigravity agy google agent integration hooks install"
         }

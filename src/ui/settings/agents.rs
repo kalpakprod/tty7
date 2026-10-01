@@ -31,6 +31,8 @@ fn cli_agent(agent: HookAgent) -> crate::core::cli_agent::CLIAgent {
         HookAgent::Cursor => C::Cursor,
         HookAgent::PrimeAgent => C::PrimeAgent,
         HookAgent::Antigravity => C::Antigravity,
+        HookAgent::Empryo => C::Empryo,
+        HookAgent::Jcode => C::Jcode,
     }
 }
 

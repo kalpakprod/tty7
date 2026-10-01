@@ -802,6 +802,8 @@ pub fn translate_zh(key: L10nKey) -> Option<&'static str> {
         L10nKey::SettingsAgentCursorCli => "Cursor CLI",
         L10nKey::SettingsAgentPrimeAgent => "Prime Agent",
         L10nKey::SettingsAgentAntigravity => "Antigravity",
+        L10nKey::SettingsAgentEmpryo => "Empryo",
+        L10nKey::SettingsAgentJcode => "jcode",
         L10nKey::SettingsAgentQoderCn => "Qoder CN CLI",
         L10nKey::SettingsSearchAboutKeywords => {
             "关于 版本 许可证 致谢 构建 更新 检查 github about version license credits update"
@@ -958,6 +960,8 @@ pub fn translate_zh(key: L10nKey) -> Option<&'static str> {
         L10nKey::SettingsSearchPrimeAgentKeywords => {
             "Prime Agent agent 集成 扩展 安装 prime prime-agent primeintellect"
         }
+        L10nKey::SettingsSearchEmpryoKeywords => "empryo agent hooks",
+        L10nKey::SettingsSearchJcodeKeywords => "jcode agent hooks",
         L10nKey::SettingsSearchAntigravityKeywords => {
             "Antigravity agent 集成 钩子 安装 antigravity agy google"
         }

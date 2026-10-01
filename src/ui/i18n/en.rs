@@ -923,6 +923,8 @@ pub fn translate_en(key: L10nKey) -> &'static str {
         L10nKey::SettingsAgentCursorCli => "Cursor CLI",
         L10nKey::SettingsAgentPrimeAgent => "Prime Agent",
         L10nKey::SettingsAgentAntigravity => "Antigravity",
+        L10nKey::SettingsAgentEmpryo => "Empryo",
+        L10nKey::SettingsAgentJcode => "jcode",
         L10nKey::SettingsAgentQoderCn => "Qoder CN CLI",
         L10nKey::SettingsSearchAboutKeywords => "version license credits build update check github",
         L10nKey::SettingsSearchAppHttpProxyKeywords => {
@@ -1039,6 +1041,8 @@ pub fn translate_en(key: L10nKey) -> &'static str {
         L10nKey::SettingsSearchPrimeAgentKeywords => {
             "agent integration extension install prime prime-agent primeintellect"
         }
+        L10nKey::SettingsSearchEmpryoKeywords => "empryo agent hooks",
+        L10nKey::SettingsSearchJcodeKeywords => "jcode agent hooks",
         L10nKey::SettingsSearchAntigravityKeywords => {
             "agent integration hooks install antigravity agy google"
         }
