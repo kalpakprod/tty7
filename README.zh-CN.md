@@ -151,14 +151,14 @@ npx skills update tty7         # 后续更新
 | **Crush** | ✓ | ✓ | | |
 | **Antigravity** | ✓ | ✓ | | |
 | **Cursor** | ✓ | ✓ | | ✓ |
+| **Empryo** | ✓ | ✓ | | |
+| **Muse Code** | ✓ | ✓ | | |
+| **jcode** | ✓ | ✓ | | |
 | Aider | ✓ | | | |
 | Amp | ✓ | | | |
 | Auggie | ✓ | | | |
 | Hermes | ✓ | | | |
 | Vibe | ✓ | | | |
-| Empryo | ✓ | | | |
-| Muse Code | ✓ | | | |
-| jcode | ✓ | | | |
 
 </details>
 

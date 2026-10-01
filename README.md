@@ -173,14 +173,14 @@ own history files and listed in Search Everywhere, where <kbd>⏎</kbd> resumes 
 | **Crush** | ✓ | ✓ | | |
 | **Antigravity** | ✓ | ✓ | | |
 | **Cursor** | ✓ | ✓ | | ✓ |
+| **Empryo** | ✓ | ✓ | | |
+| **Muse Code** | ✓ | ✓ | | |
+| **jcode** | ✓ | ✓ | | |
 | Aider | ✓ | | | |
 | Amp | ✓ | | | |
 | Auggie | ✓ | | | |
 | Hermes | ✓ | | | |
 | Vibe | ✓ | | | |
-| Empryo | ✓ | | | |
-| Muse Code | ✓ | | | |
-| jcode | ✓ | | | |
 
 </details>
 
