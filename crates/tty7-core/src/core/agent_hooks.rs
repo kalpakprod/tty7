@@ -1619,6 +1619,42 @@ fn marker_hook<'a>(entry: &'a serde_json::Value, marker: &str) -> Option<&'a ser
         .find(|h| ours(h))
 }
 
+/// jcode accepts either one command or an ordered list (HookCommands).
+fn jcode_commands(item: &toml_edit::Item) -> anyhow::Result<Vec<String>> {
+    if let Some(command) = item.as_str() {
+        return Ok(vec![command.to_owned()]);
+    }
+    if let Some(array) = item.as_array() {
+        return array
+            .iter()
+            .map(|value| {
+                value.as_str().map(str::to_owned).ok_or_else(|| {
+                    anyhow::anyhow!("jcode hook commands must be strings; not touching it")
+                })
+            })
+            .collect();
+    }
+    anyhow::bail!("jcode hook must be a string or an array of strings; not touching it")
+}
+
+fn set_jcode_commands(table: &mut toml_edit::Table, key: &str, commands: &[String]) {
+    match commands {
+        [] => {
+            table.remove(key);
+        }
+        [command] => {
+            table[key] = toml_edit::value(command.clone());
+        }
+        _ => {
+            let mut array = toml_edit::Array::new();
+            for command in commands {
+                array.push(command.as_str());
+            }
+            table[key] = toml_edit::value(array);
+        }
+    }
+}
+
 fn jcode_hooks_state(target: &HookTarget, path: &Path) -> HooksState {
     let Ok(text) = target.read(path) else {
         return HooksState::NotInstalled;
@@ -1630,16 +1666,33 @@ fn jcode_hooks_state(target: &HookTarget, path: &Path) -> HooksState {
         return HooksState::NotInstalled;
     };
     let marker = HookAgent::Jcode.marker();
-    let complete = JCODE_HOOK_EVENTS.iter().all(|(key, event)| {
-        let expected = target.hook_command(HookAgent::Jcode, event);
-        table.get(*key).and_then(|v| v.as_str()) == Some(expected.as_str())
-    });
-    let ours = JCODE_HOOK_EVENTS.iter().any(|(key, _)| {
-        table
-            .get(*key)
-            .and_then(|v| v.as_str())
-            .is_some_and(|v| v.contains(&marker))
-    });
+    let commands: Vec<_> = JCODE_HOOK_EVENTS
+        .iter()
+        .map(|(key, _)| {
+            table
+                .get(*key)
+                .map(jcode_commands)
+                .transpose()
+                .ok()
+                .flatten()
+                .unwrap_or_default()
+        })
+        .collect();
+    let ours = commands
+        .iter()
+        .flatten()
+        .any(|command| command.contains(&marker));
+    let complete = JCODE_HOOK_EVENTS
+        .iter()
+        .zip(&commands)
+        .all(|((_, event), list)| {
+            let expected = target.hook_command(HookAgent::Jcode, event);
+            let marked: Vec<_> = list
+                .iter()
+                .filter(|command| command.contains(&marker))
+                .collect();
+            marked.len() == 1 && marked[0] == &expected
+        });
     if complete {
         HooksState::Installed
     } else if ours {
@@ -1660,19 +1713,20 @@ fn jcode_hooks_install(target: &HookTarget, path: &Path) -> anyhow::Result<()> {
         Err(e) if e.kind() == io::ErrorKind::NotFound => toml_edit::DocumentMut::new(),
         Err(e) => return Err(anyhow::anyhow!("read {}: {e}", path.display())),
     };
-    let hooks = doc["hooks"].or_insert(toml_edit::table());
+    let hooks = doc.entry("hooks").or_insert(toml_edit::table());
     let table = hooks.as_table_mut().ok_or_else(|| {
         anyhow::anyhow!("{} hooks is not a table; not touching it", path.display())
     })?;
+    let marker = HookAgent::Jcode.marker();
     for (key, event) in JCODE_HOOK_EVENTS {
-        let command = target.hook_command(HookAgent::Jcode, event);
-        if let Some(existing) = table.get(*key).and_then(|v| v.as_str())
-            && !existing.contains(&HookAgent::Jcode.marker())
-            && existing != command
-        {
-            continue;
-        }
-        table[*key] = toml_edit::value(command);
+        let mut commands = table
+            .get(*key)
+            .map(jcode_commands)
+            .transpose()?
+            .unwrap_or_default();
+        commands.retain(|command| !command.contains(&marker));
+        commands.push(target.hook_command(HookAgent::Jcode, event));
+        set_jcode_commands(table, key, &commands);
     }
     target.write(path, doc.to_string().as_bytes())
 }
@@ -1695,12 +1749,14 @@ fn jcode_hooks_uninstall(target: &HookTarget, path: &Path) -> anyhow::Result<Hoo
     let marker = HookAgent::Jcode.marker();
     let mut removed = false;
     for (key, _) in JCODE_HOOK_EVENTS {
-        if table
-            .get(*key)
-            .and_then(|v| v.as_str())
-            .is_some_and(|v| v.contains(&marker))
-        {
-            table.remove(*key);
+        let Some(item) = table.get(*key) else {
+            continue;
+        };
+        let mut commands = jcode_commands(item)?;
+        let before = commands.len();
+        commands.retain(|command| !command.contains(&marker));
+        if commands.len() != before {
+            set_jcode_commands(table, key, &commands);
             removed = true;
         }
     }
@@ -3777,8 +3833,12 @@ mod tests {
         );
         assert_eq!(
             uninstall_hooks(&target, HookAgent::Empryo).unwrap(),
-            HookOutcome::NothingInstalled
+            HookOutcome::NoTty7Hooks
         );
+        assert!(path.exists(), "uninstall preserves the shared config file");
+        let root: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(root, serde_json::json!({"hooks": {}}));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -3797,7 +3857,21 @@ mod tests {
             HooksState::Installed
         );
         let text = std::fs::read_to_string(&path).unwrap();
-        assert!(text.contains("turn_start"));
+        let doc: toml_edit::DocumentMut = text.parse().unwrap();
+        let commands = jcode_commands(&doc["hooks"]["turn_start"]).unwrap();
+        assert_eq!(
+            commands,
+            vec![
+                "user-hook".to_owned(),
+                target.hook_command(HookAgent::Jcode, "prompt-submit")
+            ]
+        );
+        install_hooks(&target, HookAgent::Jcode).expect("reinstall succeeds");
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            text,
+            "reinstall adds no duplicates"
+        );
         assert!(text.contains("agent-hook jcode prompt-submit"));
         assert_eq!(
             uninstall_hooks(&target, HookAgent::Jcode).unwrap(),
