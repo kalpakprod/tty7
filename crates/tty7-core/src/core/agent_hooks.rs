@@ -660,7 +660,9 @@ impl HookAgent {
             | CLIAgent::Auggie
             | CLIAgent::Hermes
             | CLIAgent::Vibe
-            | CLIAgent::Empryo => None,
+            | CLIAgent::Empryo
+            | CLIAgent::Muse
+            | CLIAgent::Jcode => None,
         }
     }
 

@@ -53,7 +53,7 @@ A lot of people now run several coding agents at once, in several repos. Which
 means spending the day switching between windows to see which one finished and
 which one is waiting for an answer. That's not work a person should have to do.
 
-tty7 recognizes 26 coding CLIs, including Claude Code, Codex, Gemini, Cursor,
+tty7 recognizes 28 coding CLIs, including Claude Code, Codex, Gemini, Cursor,
 and OpenCode, and puts all of them in one sidebar: whether each is working or
 waiting, a notification when one needs you, and its branch and diff. You can see
 at a glance which one wants you.
@@ -179,6 +179,8 @@ own history files and listed in Search Everywhere, where <kbd>⏎</kbd> resumes 
 | Hermes | ✓ | | | |
 | Vibe | ✓ | | | |
 | Empryo | ✓ | | | |
+| Muse Code | ✓ | | | |
+| jcode | ✓ | | | |
 
 </details>
 
