@@ -33,6 +33,7 @@ fn cli_agent(agent: HookAgent) -> crate::core::cli_agent::CLIAgent {
         HookAgent::Antigravity => C::Antigravity,
         HookAgent::Empryo => C::Empryo,
         HookAgent::Jcode => C::Jcode,
+        HookAgent::Muse => C::Muse,
     }
 }
 
@@ -347,8 +348,14 @@ impl Tty7App {
         let tk = Tk::of(cx);
         let agent = row.agent;
         let mark = cli_agent(agent);
+        let manual_muse = agent == HookAgent::Muse
+            && self
+                .active_settings()
+                .is_some_and(|s| !s.agent_hooks_host.is_local());
         let (status, dot) = if busy {
             (Some(t(L10nKey::SettingsWorking)), tk.k3)
+        } else if manual_muse {
+            (Some(t(L10nKey::SettingsMuseManualInstall)), tk.warn)
         } else {
             match row.state {
                 HooksState::Installed => (Some(t(L10nKey::SettingsStatusInstalled)), tk.ok),
