@@ -1093,9 +1093,15 @@ pub fn translate_ja(key: L10nKey) -> Option<&'static str> {
         L10nKey::SettingsSearchPrimeAgentKeywords => {
             "エージェント 統合 拡張 インストール prime prime-agent primeintellect agent integration extension install"
         }
-        L10nKey::SettingsSearchEmpryoKeywords => "empryo agent hooks",
-        L10nKey::SettingsSearchJcodeKeywords => "jcode agent hooks",
-        L10nKey::SettingsSearchMuseKeywords => "muse meta agent hooks plugins",
+        L10nKey::SettingsSearchEmpryoKeywords => {
+            "エージェント 統合 フック インストール empryo agent integration hooks install"
+        }
+        L10nKey::SettingsSearchJcodeKeywords => {
+            "エージェント 統合 フック インストール jcode agent integration hooks install"
+        }
+        L10nKey::SettingsSearchMuseKeywords => {
+            "エージェント 統合 フック プラグイン インストール muse meta agent integration hooks plugins install"
+        }
         L10nKey::SettingsSearchAntigravityKeywords => {
             "エージェント 統合 フック インストール antigravity agy google agent integration hooks install"
         }

@@ -963,9 +963,9 @@ pub fn translate_zh(key: L10nKey) -> Option<&'static str> {
         L10nKey::SettingsSearchPrimeAgentKeywords => {
             "Prime Agent agent 集成 扩展 安装 prime prime-agent primeintellect"
         }
-        L10nKey::SettingsSearchEmpryoKeywords => "empryo agent hooks",
-        L10nKey::SettingsSearchJcodeKeywords => "jcode agent hooks",
-        L10nKey::SettingsSearchMuseKeywords => "muse meta agent hooks plugins",
+        L10nKey::SettingsSearchEmpryoKeywords => "Empryo agent 集成 钩子 安装 empryo",
+        L10nKey::SettingsSearchJcodeKeywords => "jcode agent 集成 钩子 安装 jcode",
+        L10nKey::SettingsSearchMuseKeywords => "Muse Code agent 集成 钩子 插件 安装 muse meta",
         L10nKey::SettingsSearchAntigravityKeywords => {
             "Antigravity agent 集成 钩子 安装 antigravity agy google"
         }
