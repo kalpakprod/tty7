@@ -71,7 +71,7 @@ that tells tty7 which session to fork. **Past sessions** are read from the agent
 own history files and listed in Search Everywhere, where <kbd>⏎</kbd> resumes one.
 
 <details>
-<summary>The full support matrix, all twenty-six</summary>
+<summary>The full support matrix, all twenty-eight</summary>
 
 | Agent | Detected | Status · resume | Fork | Past sessions |
 |---|:-:|:-:|:-:|:-:|
