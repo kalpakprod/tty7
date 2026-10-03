@@ -15,6 +15,8 @@
 //!   keystrokes up, and a few [`PaneEvent`]s beside them;
 //! - a one-shot [`Open::NewTab`] stream that starts a shell in a new tab and
 //!   answers with a [`TabCreated`];
+//! - a one-shot [`Open::ClosePane`] stream that closes a pane and ends what
+//!   runs in it;
 //! - a one-shot [`Open::Upload`] stream that carries a file from the phone to
 //!   the machine and answers with where it landed, an [`Uploaded`];
 //! - a one-shot [`Open::Diff`] stream that answers with a git working tree's
@@ -96,13 +98,19 @@ pub enum Open {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         machine: Option<String>,
     },
-    /// Put a file from the phone on the machine, for a pane to be handed its
-    /// path. After `Ok` the phone sends the file as bytes frames and finishes
-    /// its side; the gateway answers [`Uploaded`] once the file is written.
-    /// `Denied` before any bytes: too big, or a machine files cannot go to.
+    /// Close a tab, its panes with it. One-shot: `Ok` once it is closed, or
+    /// `Denied` with why not. Where the machine keeps closed tabs, it goes on
+    /// the workspace's recently-closed list, for the desktop to reopen.
     ///
     /// A gateway older than this variant cannot parse it and drops the stream
     /// unanswered.
+    CloseTab {
+        workspace_id: String,
+        tab_id: String,
+        /// As on [`Open::Pane`].
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        machine: Option<String>,
+    },
     /// What has changed in the git working tree `cwd` is in, against its last
     /// commit: `Ok`, then a [`Diff`]. `Denied` when it is not in a repository.
     ///
@@ -114,6 +122,26 @@ pub enum Open {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         machine: Option<String>,
     },
+    /// Close a pane, as closing it on the desktop does: it leaves its tab (the
+    /// tab with it, when it was the last pane there) and whatever runs in it
+    /// is ended. One-shot: `Ok` once it is closed, or `Denied` with what went
+    /// wrong. The tree on the control stream shows it gone on its own.
+    ///
+    /// A gateway older than this variant cannot parse it and drops the stream
+    /// unanswered.
+    ClosePane {
+        pane_id: u64,
+        /// As on [`Open::Pane`].
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        machine: Option<String>,
+    },
+    /// Put a file from the phone on the machine, for a pane to be handed its
+    /// path. After `Ok` the phone sends the file as bytes frames and finishes
+    /// its side; the gateway answers [`Uploaded`] once the file is written.
+    /// `Denied` before any bytes: too big, or a machine files cannot go to.
+    ///
+    /// A gateway older than this variant cannot parse it and drops the stream
+    /// unanswered.
     Upload {
         /// The file's name on the phone; the gateway keeps what it safely can.
         name: String,
@@ -274,6 +302,33 @@ pub struct WorkspaceView {
     pub id: String,
     pub name: String,
     pub tabs: Vec<TabView>,
+    /// The desktop sidebar's groups, in its order: pinned groups, then the
+    /// ones it works out per repository or SSH host, then the tabs in none.
+    /// Every tab is in exactly one. Empty from a gateway that predates
+    /// groups, and the tabs are then one list.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub groups: Vec<GroupView>,
+    /// The tab the desktop last had in front in this workspace.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_tab: Option<String>,
+}
+
+/// One of the desktop sidebar's groups of tabs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GroupView {
+    /// What its header reads. `None` for the tabs in no group when there is
+    /// no other group to set them apart from, which the desktop draws without
+    /// a header.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// A group the user pinned, rather than one worked out from the tabs.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub pinned: bool,
+    /// Folded shut on the desktop.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub collapsed: bool,
+    /// Its tabs' ids, in the workspace's order.
+    pub tabs: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -293,6 +348,11 @@ pub struct PaneView {
     pub cwd: Option<String>,
     #[serde(default)]
     pub agent: Option<AgentView>,
+    /// Nothing is running in it: the machine's server restarted, and no
+    /// window has opened the tab since to start it again. Absent from an
+    /// older gateway, which cannot tell.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub stopped: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -621,6 +681,31 @@ mod tests {
             .unwrap(),
             serde_json::json!({"type": "pane", "pane_id": 3})
         );
+    }
+
+    #[test]
+    fn a_close_names_only_the_pane_for_this_machine() {
+        let open = Open::ClosePane {
+            pane_id: 7,
+            machine: None,
+        };
+        let wire = serde_json::to_value(&open).unwrap();
+        assert_eq!(
+            wire,
+            serde_json::json!({"type": "close_pane", "pane_id": 7})
+        );
+        assert_eq!(serde_json::from_value::<Open>(wire).unwrap(), open);
+
+        let remote = Open::ClosePane {
+            pane_id: 7,
+            machine: Some("me@box:22".into()),
+        };
+        let wire = serde_json::to_value(&remote).unwrap();
+        assert_eq!(
+            wire,
+            serde_json::json!({"type": "close_pane", "pane_id": 7, "machine": "me@box:22"})
+        );
+        assert_eq!(serde_json::from_value::<Open>(wire).unwrap(), remote);
     }
 
     #[test]
