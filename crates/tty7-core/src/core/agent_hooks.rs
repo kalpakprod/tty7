@@ -21,6 +21,7 @@ pub fn run_agent_hook(agent: &str, event: &str) {
     if !std::io::stdin().is_terminal() {
         let _ = std::io::stdin().take(MAX_STDIN).read_to_string(&mut input);
     }
+    let input = hook_payload(agent, input, |k| std::env::var(k).ok());
     let Some(event) = effective_event(agent, event, &input) else {
         return;
     };
@@ -64,6 +65,20 @@ fn detach_console() {
 
 #[cfg(unix)]
 fn detach_console() {}
+
+/// The event's payload: what the agent wrote on stdin, or — for jcode, which
+/// leaves stdin closed and describes the event in its environment instead —
+/// the JSON mirror it exports as `JCODE_HOOK_PAYLOAD` (`session_id`, `cwd`,
+/// and the event's own fields).
+fn hook_payload(agent: &str, stdin: String, env: impl Fn(&str) -> Option<String>) -> String {
+    if agent == "jcode"
+        && stdin.trim().is_empty()
+        && let Some(payload) = env("JCODE_HOOK_PAYLOAD").filter(|p| !p.trim().is_empty())
+    {
+        return payload;
+    }
+    stdin
+}
 
 fn effective_agent(agent: &str, ran_by_grok: bool) -> &str {
     if ran_by_grok { "grok" } else { agent }
@@ -1358,6 +1373,18 @@ const QWEN_HOOK_EVENTS: &[(&str, &str)] = &[
     ("SessionEnd", "session-end"),
 ];
 
+/// jcode's lifecycle keys under `[hooks]` in its `config.toml`, each holding
+/// one command or an ordered list of them. jcode runs these as detached
+/// observers and describes the event in `JCODE_HOOK_*` environment variables
+/// rather than on stdin — see [`hook_payload`].
+const JCODE_HOOK_EVENTS: &[(&str, &str)] = &[
+    ("turn_start", "prompt-submit"),
+    ("turn_end", "stop"),
+    ("session_start", "session-start"),
+    ("session_end", "session-end"),
+    ("post_tool", "tool-complete"),
+];
+
 /// Kimi Code's hooks live as `[[hooks]]` entries in its main `config.toml` —
 /// the same file that holds the user's providers and models — so they go
 /// through the TOML merge strategy rather than a JSON map or an owned file.
@@ -1371,14 +1398,6 @@ const QWEN_HOOK_EVENTS: &[(&str, &str)] = &[
 /// leave the pane on "working" forever and `tty7 wait` would only ever time
 /// out, so both report the same end-of-turn as `Stop` does. All three are
 /// observation-only events, and a doubled `stop` is idempotent.
-const JCODE_HOOK_EVENTS: &[(&str, &str)] = &[
-    ("turn_start", "prompt-submit"),
-    ("turn_end", "stop"),
-    ("session_start", "session-start"),
-    ("session_end", "session-end"),
-    ("post_tool", "tool-complete"),
-];
-
 const KIMI_HOOK_EVENTS: &[(&str, &str)] = &[
     ("SessionStart", "session-start"),
     ("UserPromptSubmit", "prompt-submit"),
@@ -1686,12 +1705,18 @@ fn muse_cli(args: &[String]) -> anyhow::Result<serde_json::Value> {
         .args(["plugins"])
         .args(args)
         .arg("--json");
-    let out = crate::core::proc::hide_console(&mut cmd).output()?;
+    // Settings and `tty7 doctor` both wait on this; a Muse that hangs (a
+    // login prompt, a stuck update check) must not take either down with it.
+    let out = crate::core::proc::output_within(
+        crate::core::proc::hide_console(&mut cmd),
+        std::time::Duration::from_secs(30),
+    )?;
     if !out.status.success() {
         anyhow::bail!(
-            "muse plugins {} failed ({})",
+            "muse plugins {} failed ({}): {}",
             args.first().map(String::as_str).unwrap_or(""),
-            out.status
+            out.status,
+            String::from_utf8_lossy(&out.stderr).trim()
         );
     }
     Ok(serde_json::from_slice(&out.stdout)?)
@@ -4154,6 +4179,24 @@ mod tests {
             serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         assert_eq!(root, serde_json::json!({"hooks": {}}));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_jcode_report_reads_its_session_from_the_environment() {
+        let env = |k: &str| {
+            (k == "JCODE_HOOK_PAYLOAD").then(|| {
+                r#"{"event":"session_start","session_id":"j-7","cwd":"/work"}"#.to_string()
+            })
+        };
+        let input = hook_payload("jcode", String::new(), env);
+        let event = round_trip("jcode", "session-start", &input);
+        assert_eq!(event.agent, Some(CLIAgent::Jcode));
+        assert_eq!(event.session_id.as_deref(), Some("j-7"));
+        assert_eq!(event.cwd.as_deref(), Some(Path::new("/work")));
+        // Only jcode is read from there, and stdin still wins when it has
+        // something to say.
+        assert_eq!(hook_payload("claude", String::new(), env), "");
+        assert_eq!(hook_payload("jcode", "{}".into(), env), "{}");
     }
 
     #[test]
